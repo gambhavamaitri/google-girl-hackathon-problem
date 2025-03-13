@@ -1,0 +1,121 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+// Graph representation
+unordered_map<string, vector<string>> circuitConnections;
+unordered_map<string, double> logicDepth;
+unordered_map<string, int> dependencyCount;
+
+// Gate delays (in nanoseconds)
+unordered_map<string, double> gateDelay = {
+    {"AND_Gate", 1.2},
+    {"OR_Gate", 1.5},
+    {"FlipFlop", 2.0},
+    {"Intermediate", 0.8}
+};
+
+// Function to compute logic depth using DFS
+double calculateLogicDepth(string component) {
+    if (logicDepth.count(component)) return logicDepth[component];
+
+    double maxDepth = 0;
+    for (string next : circuitConnections[component]) {
+        maxDepth = max(maxDepth, calculateLogicDepth(next));
+    }
+
+    logicDepth[component] = maxDepth + (gateDelay.count(component) ? gateDelay[component] : 1);
+    return logicDepth[component];
+}
+
+// Function to optimize logic depth using gate delays
+double optimizeLogicDepth() {
+    queue<string> availableGates;
+    unordered_map<string, double> executionTime;  // Stores the earliest execution time of each node
+
+    // Initialize nodes with no dependencies
+    for (auto &entry : dependencyCount) {
+        if (entry.second == 0) {
+            availableGates.push(entry.first);
+            executionTime[entry.first] = 0; // Start at time 0
+        }
+    }
+
+    double optimizedDepth = 0;
+    
+    while (!availableGates.empty()) {
+        string current = availableGates.front();
+        availableGates.pop();
+
+        double currentTime = executionTime[current];
+
+        optimizedDepth = max(optimizedDepth, currentTime);
+
+        for (string next : circuitConnections[current]) {
+            dependencyCount[next]--;
+
+            // Compute the earliest time this gate can execute
+            double newTime = currentTime + (gateDelay.count(current) ? gateDelay[current] : 1);
+            executionTime[next] = max(executionTime[next], newTime);
+
+            if (dependencyCount[next] == 0) {
+                availableGates.push(next);
+            }
+        }
+    }
+    
+    return optimizedDepth;
+}
+
+// Function to analyze initial circuit depth
+pair<double, double> analyzeCircuit() {
+    double maxDepth = 0, totalDelay = 0;
+
+    for (auto &node : circuitConnections) {
+        if (logicDepth.find(node.first) == logicDepth.end()) {
+            maxDepth = max(maxDepth, calculateLogicDepth(node.first));
+        }
+    }
+
+    for (auto &entry : logicDepth) {
+        totalDelay += entry.second;
+    }
+
+    return {maxDepth, totalDelay};
+}
+
+int main() {
+    // Define the circuit
+    circuitConnections["Input_A"] = {"AND_Gate"};
+    circuitConnections["Input_B"] = {"AND_Gate"};
+    circuitConnections["Input_C"] = {"OR_Gate"};
+    circuitConnections["AND_Gate"] = {"OR_Gate"};
+    circuitConnections["OR_Gate"] = {"Intermediate"};
+    circuitConnections["Input_D"] = {"Intermediate"};
+    circuitConnections["Intermediate"] = {"FlipFlop"};
+    circuitConnections["FlipFlop"] = {"Output_Q"};
+
+    // Compute dependencies (in-degree count)
+    for (auto &entry : circuitConnections) {
+        for (string connectedComponent : entry.second) {
+            dependencyCount[connectedComponent]++;
+        }
+    }
+
+    // Ensure all nodes exist in dependencyCount
+    for (auto &entry : circuitConnections) {
+        if (dependencyCount.find(entry.first) == dependencyCount.end()) {
+            dependencyCount[entry.first] = 0;
+        }
+    }
+
+    // Compute initial logic depth
+    pair<double, double> initialResult = analyzeCircuit();
+    cout << "Original Logic Depth: " << initialResult.first << " ns" << endl;
+    cout << "Original Circuit Delay: " << initialResult.second << " ns" << endl;
+
+    // Optimize logic depth
+    double optimizedDepth = optimizeLogicDepth();
+    cout << "Optimized Logic Depth: " << optimizedDepth << " ns" << endl;
+
+    return 0;
+}
