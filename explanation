@@ -1,0 +1,176 @@
+** Define Data Structures**
+unordered_map<string, vector<string>> circuitConnections;
+unordered_map<string, double> logicDepth;
+unordered_map<string, int> dependencyCount;
+
+- `circuitConnections`: Stores a **directed graph** where the key is a component (e.g., `"AND_Gate"`) and the value is a list of components connected to it.
+- `logicDepth`: Stores the **logic depth** (cumulative delay) of each node.
+- `dependencyCount`: Keeps track of how many components depend on a given component (i.e., in-degree count).
+
+---
+
+ ** Define Gate Delays**
+unordered_map<string, double> gateDelay = {
+    {"AND_Gate", 1.2},
+    {"OR_Gate", 1.5},
+    {"FlipFlop", 2.0},
+    {"Intermediate", 0.8}
+};
+
+- Stores **gate delays** (in nanoseconds) for different components.
+- If a component isn't found in this map, it will be assigned a default delay later.
+
+---
+
+ ** Function to Compute Logic Depth Using DFS**
+
+double calculateLogicDepth(string component) {
+    if (logicDepth.count(component)) return logicDepth[component];
+```
+- **Base case:** If `logicDepth` already contains the component, return its stored value (prevents redundant calculations).
+  
+
+    double maxDepth = 0;
+    for (string next : circuitConnections[component]) {
+        maxDepth = max(maxDepth, calculateLogicDepth(next));
+    }
+```
+- **Recursive DFS traversal:**  
+  - Finds the maximum depth among all connected components.
+
+```
+    logicDepth[component] = maxDepth + (gateDelay.count(component) ? gateDelay[component] : 1);
+    return logicDepth[component];
+}
+```
+- Stores the computed depth by adding the **gate delay** of the current component.
+- If the component is not found in `gateDelay`, it assigns a **default delay of 1 ns**.
+
+---
+
+ ** Function to Optimize Logic Depth Using Topological Sorting (BFS)**
+```cpp
+double optimizeLogicDepth() {
+    queue<string> availableGates;
+    unordered_map<string, double> executionTime;  // Stores the earliest execution time of each node
+```
+- Uses **BFS (topological sorting)** to process the circuit in an optimized order.
+- `executionTime` stores when each component **can start execution**.
+
+```
+    for (auto &entry : dependencyCount) {
+        if (entry.second == 0) {
+            availableGates.push(entry.first);
+            executionTime[entry.first] = 0; // Start at time 0
+        }
+    }
+```
+- Pushes **all components that have no dependencies** (i.e., input nodes) into the queue.
+- Sets their execution start time to **0**.
+
+```
+    double optimizedDepth = 0;
+    
+    while (!availableGates.empty()) {
+        string current = availableGates.front();
+        availableGates.pop();
+
+        double currentTime = executionTime[current];
+
+        optimizedDepth = max(optimizedDepth, currentTime);
+```
+- Processes components in **BFS order**.
+- Updates `optimizedDepth` as the **maximum execution time encountered**.
+
+```
+        for (string next : circuitConnections[current]) {
+            dependencyCount[next]--;
+
+            // Compute the earliest time this gate can execute
+            double newTime = currentTime + (gateDelay.count(current) ? gateDelay[current] : 1);
+            executionTime[next] = max(executionTime[next], newTime);
+
+            if (dependencyCount[next] == 0) {
+                availableGates.push(next);
+            }
+        }
+    }
+    
+    return optimizedDepth;
+}
+```
+- **Reduces in-degree of the next component** (since `current` has been processed).
+- **Updates execution time** based on the current delay.
+- **Adds components to the queue** when all their dependencies are resolved.
+
+---
+
+** Function to Analyze the Initial Circuit Depth**
+```
+pair<double, double> analyzeCircuit() {
+    double maxDepth = 0, totalDelay = 0;
+```
+- `maxDepth`: Stores the **maximum** logic depth in the circuit.
+- `totalDelay`: Stores the **sum of all delays**.
+
+```
+    for (auto &node : circuitConnections) {
+        if (logicDepth.find(node.first) == logicDepth.end()) {
+            maxDepth = max(maxDepth, calculateLogicDepth(node.first));
+        }
+    }
+```
+- Calls `calculateLogicDepth()` for every node.
+- Updates `maxDepth` with the largest depth found.
+
+```
+    for (auto &entry : logicDepth) {
+        totalDelay += entry.second;
+    }
+```
+- Computes **total circuit delay** by summing all gate delays.
+
+```cpp
+    return {maxDepth, totalDelay};
+}
+```
+- Returns **both max depth and total delay** as a pair.
+
+---
+
+** Main Function: Circuit Definition & Execution**
+```cpp
+int main() {
+    
+    circuitConnections["Input_A"] = {"AND_Gate"};
+    circuitConnections["Input_B"] = {"AND_Gate"};
+    circuitConnections["Input_C"] = {"OR_Gate"};
+    circuitConnections["AND_Gate"] = {"OR_Gate"};
+    circuitConnections["OR_Gate"] = {"Intermediate"};
+    circuitConnections["Input_D"] = {"Intermediate"};
+    circuitConnections["Intermediate"] = {"FlipFlop"};
+    circuitConnections["FlipFlop"] = {"Output_Q"};
+```
+- Defines the **circuit connections** as a directed graph.
+
+```
+  
+    for (auto &entry : circuitConnections) {
+        for (string connectedComponent : entry.second) {
+            dependencyCount[connectedComponent]++;
+        }
+    }
+```
+- **Counts how many inputs each node has** (in-degree).
+
+```
+    // Ensure all nodes exist in dependencyCount
+    for (auto &entry : circuitConnections) {
+        if (dependencyCount.find(entry.first) == dependencyCount.end()) {
+            dependencyCount[entry.first] = 0;
+        }
+    }
+```
+- Ensures **every node is in `dependencyCount`**, even if it has zero inputs.
+- Calls `analyzeCircuit()` to compute the **original depth and delay**.
+- Prints them.
